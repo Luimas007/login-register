@@ -1,9 +1,8 @@
-
 # 🌐 Elegant Auth System — Registration & Login with MongoDB
 
 A full-stack user authentication system with a stunning Bootstrap frontend and MongoDB backend. Features a glassmorphism UI, form validation, password hashing, and dynamic background — perfect for modern web apps or portfolio projects.
 
-![Preview](./public/screenshot.png) <!-- Replace with actual screenshot -->
+![Preview](./public/login.png) <!-- Replace with actual screenshot -->
 
 ---
 
@@ -20,8 +19,8 @@ A full-stack user authentication system with a stunning Bootstrap frontend and M
 
 ## 🛠️ Tech Stack
 
-| Frontend         | Backend         | Database |
-|------------------|------------------|----------|
+| Frontend               | Backend             | Database           |
+| ---------------------- | ------------------- | ------------------ |
 | HTML, CSS, Bootstrap 5 | Node.js, Express.js | MongoDB + Mongoose |
 
 ---
@@ -80,9 +79,9 @@ login-register/
 
 ## 📸 Screenshots
 
-| Login | Register |
-|-------|----------|
-| ![Login](./public/screenshot-login.png) | ![Register](./public/screenshot-register.png) |
+| Login                        | Register                           |
+| ---------------------------- | ---------------------------------- |
+| ![Login](./public/login.png) | ![Register](./public/register.png) |
 
 ---
 
