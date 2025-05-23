@@ -7,6 +7,7 @@ const path = require("path");
 const crypto = require("crypto");
 const multer = require("multer");
 const { Resend } = require("resend");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const app = express();
@@ -22,7 +23,6 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + path.extname(file.originalname));
   },
 });
-
 const upload = multer({ storage: storage });
 
 // Middleware
@@ -39,7 +39,18 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// User model
+// Auth middleware
+const authenticateToken = (req, res, next) => {
+  const token = req.headers["authorization"];
+  if (!token) return res.sendStatus(401);
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+// Models
 const UserSchema = new mongoose.Schema({
   username: String,
   email: { type: String, unique: true },
@@ -52,8 +63,19 @@ const UserSchema = new mongoose.Schema({
   resetToken: String,
   resetTokenExpiry: Date,
 });
-
 const User = mongoose.model("User", UserSchema);
+
+const PostSchema = new mongoose.Schema({
+  type: { type: String, enum: ["lost", "found"], required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  place: String,
+  time: String,
+  date: Date,
+  image: String,
+  createdAt: { type: Date, default: Date.now },
+  status: { type: String, default: "Pending" },
+});
+const Post = mongoose.model("Post", PostSchema);
 
 // In-memory OTP store
 let otpStore = {};
@@ -61,7 +83,7 @@ let otpStore = {};
 // Resend setup
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Routes
+// HTML Routes
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
@@ -76,6 +98,18 @@ app.get("/forgot-password", (req, res) => {
 
 app.get("/reset-password", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "reset-password.html"));
+});
+
+app.get("/profile", authenticateToken, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "profile.html"));
+});
+
+app.get("/post-lost", authenticateToken, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "post-lost.html"));
+});
+
+app.get("/post-found", authenticateToken, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "post-found.html"));
 });
 
 // Register with OTP send
@@ -134,19 +168,14 @@ app.post("/api/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
   const record = otpStore[email];
 
-  if (!record) {
+  if (!record)
     return res
       .status(400)
       .json({ message: "No OTP request found for this email." });
-  }
-
-  if (Date.now() > record.expiry) {
+  if (Date.now() > record.expiry)
     return res.status(400).json({ message: "OTP has expired." });
-  }
-
-  if (record.otp !== otp) {
+  if (record.otp !== otp)
     return res.status(400).json({ message: "Invalid OTP." });
-  }
 
   const user = new User({
     username: record.username,
@@ -165,46 +194,55 @@ app.post("/api/verify-otp", async (req, res) => {
   res.json({ message: "Registration complete. You can now log in." });
 });
 
-// Login route
+// Login
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password)
     return res.status(400).json({ message: "All fields are required." });
-  }
 
   const user = await User.findOne({ email });
-  if (!user) {
+  if (!user)
     return res.status(401).json({ message: "Invalid email or password." });
-  }
-
-  if (!user.verified) {
+  if (!user.verified)
     return res.status(401).json({ message: "Please verify your email first." });
-  }
 
   const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
+  if (!isMatch)
     return res.status(401).json({ message: "Invalid email or password." });
-  }
 
-  res.json({ message: `Welcome, ${user.username}!` });
+  const token = jwt.sign(
+    { userId: user._id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "2h" }
+  );
+
+  res.json({
+    message: `Welcome, ${user.username}!`,
+    token,
+    user: {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      rollNo: user.rollNo,
+      phone: user.phone,
+      department: user.department,
+      idCard: user.idCard,
+    },
+  });
 });
 
 // Forgot password
 app.post("/api/forgot-password", async (req, res) => {
   const { email } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ message: "Email is required." });
-  }
+  if (!email) return res.status(400).json({ message: "Email is required." });
 
   const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(404).json({ message: "User not found." });
-  }
+  if (!user) return res.status(404).json({ message: "User not found." });
 
   const resetToken = crypto.randomBytes(20).toString("hex");
-  const resetTokenExpiry = Date.now() + 3600000; // 1 hour
+  const resetTokenExpiry = Date.now() + 3600000;
 
   user.resetToken = resetToken;
   user.resetTokenExpiry = resetTokenExpiry;
@@ -242,9 +280,8 @@ app.post("/api/reset-password", async (req, res) => {
     resetTokenExpiry: { $gt: Date.now() },
   });
 
-  if (!user) {
+  if (!user)
     return res.status(400).json({ message: "Invalid or expired token." });
-  }
 
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   user.password = hashedPassword;
@@ -257,6 +294,104 @@ app.post("/api/reset-password", async (req, res) => {
       "Password updated successfully. You can now login with your new password.",
   });
 });
+
+// Profile route (protected)
+app.get("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select(
+      "-password -resetToken -resetTokenExpiry"
+    );
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    // Get user's posts
+    const posts = await Post.find({ userId: user._id }).sort({ createdAt: -1 });
+
+    res.json({
+      user,
+      posts,
+    });
+  } catch (error) {
+    console.error("Profile error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get user posts
+app.get("/api/user-posts", authenticateToken, async (req, res) => {
+  try {
+    const posts = await Post.find({ userId: req.user.userId }).sort({
+      createdAt: -1,
+    });
+    res.json(posts);
+  } catch (error) {
+    console.error("Posts error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Report Lost Item
+app.post(
+  "/api/report-lost",
+  authenticateToken,
+  upload.single("image"),
+  async (req, res) => {
+    const { place, time, date } = req.body;
+    const image = req.file ? "/uploads/" + req.file.filename : null;
+
+    if (!place || !time || !date || !image) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+
+    try {
+      const post = new Post({
+        type: "lost",
+        userId: req.user.userId,
+        place,
+        time,
+        date,
+        image,
+      });
+
+      await post.save();
+      res.json({ message: "Lost item reported successfully.", post });
+    } catch (error) {
+      console.error("Report lost error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Report Found Item
+app.post(
+  "/api/report-found",
+  authenticateToken,
+  upload.single("image"),
+  async (req, res) => {
+    const { place, time, date } = req.body;
+    const image = req.file ? "/uploads/" + req.file.filename : null;
+
+    if (!place || !time || !date || !image) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+
+    try {
+      const post = new Post({
+        type: "found",
+        userId: req.user.userId,
+        place,
+        time,
+        date,
+        image,
+      });
+
+      await post.save();
+      res.json({ message: "Found item reported successfully.", post });
+    } catch (error) {
+      console.error("Report found error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
 
 // Start server
 app.listen(PORT, () => {

@@ -1,15 +1,50 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const registerForm = document.getElementById("register-form");
-  const otpForm = document.getElementById("otp-form");
-  const loginForm = document.getElementById("login-form");
-  const forgotPasswordForm = document.getElementById("forgot-password-form");
-  const resetPasswordForm = document.getElementById("reset-password-form");
+  // Common elements and functions
+  const showMessage = (message, type) => {
+    const messageDiv = document.getElementById("message");
+    if (messageDiv) {
+      messageDiv.textContent = message;
+      messageDiv.className = `alert alert-${type}`;
+      messageDiv.style.display = "block";
 
-  // Registration
+      setTimeout(() => {
+        messageDiv.style.display = "none";
+      }, 5000);
+    }
+  };
+
+  // Check authentication for protected pages
+  const checkAuth = () => {
+    const token = localStorage.getItem("token");
+    if (
+      !token &&
+      (window.location.pathname.includes("profile") ||
+        window.location.pathname.includes("post-lost") ||
+        window.location.pathname.includes("post-found"))
+    ) {
+      window.location.href = "/login.html";
+      return false;
+    }
+    return token;
+  };
+
+  // Set up logout functionality
+  const logoutElements = document.querySelectorAll("#logout");
+  if (logoutElements.length > 0) {
+    logoutElements.forEach((element) => {
+      element.addEventListener("click", (e) => {
+        e.preventDefault();
+        localStorage.removeItem("token");
+        window.location.href = "/login.html";
+      });
+    });
+  }
+
+  // Registration form
+  const registerForm = document.getElementById("register-form");
   if (registerForm) {
     registerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-
       const formData = new FormData(registerForm);
 
       try {
@@ -26,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
             "pendingEmail",
             document.getElementById("email").value
           );
-          setTimeout(() => (window.location.href = "otp.html"), 1500);
+          setTimeout(() => (window.location.href = "/otp.html"), 1500);
         }
       } catch (error) {
         showMessage("An error occurred. Please try again.", "danger");
@@ -36,6 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // OTP Verification
+  const otpForm = document.getElementById("otp-form");
   if (otpForm) {
     otpForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -54,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (res.ok && data.message.includes("complete")) {
           localStorage.removeItem("pendingEmail");
-          setTimeout(() => (window.location.href = "login.html"), 2000);
+          setTimeout(() => (window.location.href = "/login.html"), 2000);
         }
       } catch (error) {
         showMessage("An error occurred. Please try again.", "danger");
@@ -63,7 +99,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Login
+  // Login form
+  const loginForm = document.getElementById("login-form");
   if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -81,9 +118,10 @@ document.addEventListener("DOMContentLoaded", () => {
         showMessage(data.message, res.ok ? "success" : "danger");
 
         if (res.ok) {
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("user", JSON.stringify(data.user));
           setTimeout(() => {
-            // Redirect to dashboard or home page after successful login
-            window.location.href = "dashboard.html";
+            window.location.href = "/profile.html";
           }, 1500);
         }
       } catch (error) {
@@ -94,6 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Forgot Password
+  const forgotPasswordForm = document.getElementById("forgot-password-form");
   if (forgotPasswordForm) {
     forgotPasswordForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -110,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showMessage(data.message, res.ok ? "success" : "danger");
 
         if (res.ok) {
-          setTimeout(() => (window.location.href = "login.html"), 3000);
+          setTimeout(() => (window.location.href = "/login.html"), 3000);
         }
       } catch (error) {
         showMessage("An error occurred. Please try again.", "danger");
@@ -120,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Reset Password
+  const resetPasswordForm = document.getElementById("reset-password-form");
   if (resetPasswordForm) {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get("token");
@@ -150,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showMessage(data.message, res.ok ? "success" : "danger");
 
         if (res.ok) {
-          setTimeout(() => (window.location.href = "login.html"), 2000);
+          setTimeout(() => (window.location.href = "/login.html"), 2000);
         }
       } catch (error) {
         showMessage("An error occurred. Please try again.", "danger");
@@ -159,15 +199,144 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Helper function to show messages
-  function showMessage(message, type) {
-    const messageDiv = document.getElementById("message");
-    messageDiv.textContent = message;
-    messageDiv.className = `alert alert-${type}`;
-    messageDiv.style.display = "block";
+  // Lost Item Report
+  const lostForm = document.getElementById("lost-form");
+  if (lostForm) {
+    if (!checkAuth()) return;
 
-    setTimeout(() => {
-      messageDiv.style.display = "none";
-    }, 5000);
+    lostForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData();
+      formData.append("place", document.getElementById("place").value);
+      formData.append("time", document.getElementById("time").value);
+      formData.append("date", document.getElementById("date").value);
+      formData.append("image", document.getElementById("image").files[0]);
+
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch("/api/report-lost", {
+          method: "POST",
+          headers: {
+            Authorization: token,
+          },
+          body: formData,
+        });
+
+        const data = await res.json();
+        showMessage(data.message, res.ok ? "success" : "danger");
+
+        if (res.ok) {
+          setTimeout(() => {
+            window.location.href = "/profile.html";
+          }, 1500);
+        }
+      } catch (error) {
+        showMessage("An error occurred. Please try again.", "danger");
+        console.error("Lost item report error:", error);
+      }
+    });
+  }
+
+  // Found Item Report
+  const foundForm = document.getElementById("found-form");
+  if (foundForm) {
+    if (!checkAuth()) return;
+
+    foundForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData();
+      formData.append("place", document.getElementById("place").value);
+      formData.append("time", document.getElementById("time").value);
+      formData.append("date", document.getElementById("date").value);
+      formData.append("image", document.getElementById("image").files[0]);
+
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch("/api/report-found", {
+          method: "POST",
+          headers: {
+            Authorization: token,
+          },
+          body: formData,
+        });
+
+        const data = await res.json();
+        showMessage(data.message, res.ok ? "success" : "danger");
+
+        if (res.ok) {
+          setTimeout(() => {
+            window.location.href = "/profile.html";
+          }, 1500);
+        }
+      } catch (error) {
+        showMessage("An error occurred. Please try again.", "danger");
+        console.error("Found item report error:", error);
+      }
+    });
+  }
+
+  // Profile Page
+  if (window.location.pathname.includes("profile.html")) {
+    if (!checkAuth()) return;
+
+    const loadProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const user = JSON.parse(localStorage.getItem("user"));
+
+        // Display user info
+        if (user) {
+          document.getElementById("profile-name").textContent = user.username;
+          document.getElementById("profile-email").textContent = user.email;
+          document.getElementById("profile-rollno").textContent = user.rollNo;
+          document.getElementById("profile-phone").textContent = user.phone;
+          document.getElementById("profile-dept").textContent = user.department;
+          if (user.idCard) {
+            document.getElementById("profile-image").src = user.idCard;
+          }
+        }
+
+        // Load user's posts
+        const res = await fetch("/api/user-posts", {
+          headers: {
+            Authorization: token,
+          },
+        });
+
+        if (res.ok) {
+          const posts = await res.json();
+          const lostItemsTable = document.getElementById("lost-items");
+          const foundItemsTable = document.getElementById("found-items");
+
+          // Clear existing rows
+          lostItemsTable.innerHTML = "";
+          foundItemsTable.innerHTML = "";
+
+          // Populate tables
+          posts.forEach((post) => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${new Date(post.date).toLocaleDateString()}</td>
+              <td>${post.place}</td>
+              <td>${post.time}</td>
+              <td>${post.status}</td>
+            `;
+
+            if (post.type === "lost") {
+              lostItemsTable.appendChild(row);
+            } else {
+              foundItemsTable.appendChild(row);
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Profile load error:", error);
+        showMessage("Failed to load profile data", "danger");
+      }
+    };
+
+    loadProfile();
   }
 });
