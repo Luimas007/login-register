@@ -85,6 +85,10 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // HTML Routes
 app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
@@ -110,6 +114,24 @@ app.get("/post-lost", authenticateToken, (req, res) => {
 
 app.get("/post-found", authenticateToken, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "post-found.html"));
+});
+
+// New endpoint to get all items
+app.get("/api/all-items", async (req, res) => {
+  try {
+    const lostItems = await Post.find({ type: "lost" }).sort({ createdAt: -1 });
+    const foundItems = await Post.find({ type: "found" }).sort({
+      createdAt: -1,
+    });
+
+    res.json({
+      lostItems,
+      foundItems,
+    });
+  } catch (error) {
+    console.error("Error fetching items:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 // Register with OTP send

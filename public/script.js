@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
       element.addEventListener("click", (e) => {
         e.preventDefault();
         localStorage.removeItem("token");
+        localStorage.removeItem("user");
         window.location.href = "/login.html";
       });
     });
@@ -338,5 +339,118 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     loadProfile();
+  }
+
+  // Index Page Functionality
+  if (
+    window.location.pathname === "/" ||
+    window.location.pathname === "/index.html"
+  ) {
+    // About text animation
+    const aboutText = document.getElementById("aboutText");
+    if (aboutText) {
+      const observer1 = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              aboutText.classList.add("show");
+            }
+          });
+        },
+        { threshold: 0.5 }
+      );
+      observer1.observe(aboutText);
+    }
+
+    // Load all items when page loads
+    const loadItems = async () => {
+      try {
+        const res = await fetch("/api/all-items");
+        const data = await res.json();
+
+        if (res.ok) {
+          displayItems(data.lostItems, "lost-items-container");
+          displayItems(data.foundItems, "found-items-container");
+        }
+      } catch (error) {
+        console.error("Error loading items:", error);
+      }
+    };
+
+    const displayItems = (items, containerId) => {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      container.innerHTML = "";
+
+      if (items.length === 0) {
+        container.innerHTML = "<p>No items found.</p>";
+        return;
+      }
+
+      items.forEach((item) => {
+        const itemCard = document.createElement("div");
+        itemCard.className = "item-card";
+        itemCard.innerHTML = `
+          <img src="${item.image}" alt="${item.type} item" class="item-image">
+          <div class="item-details">
+            <h4>${item.type === "lost" ? "Lost" : "Found"} at ${item.place}</h4>
+            <p>Reported on ${new Date(item.date).toLocaleDateString()}</p>
+            <div class="item-meta">
+              <span>Time: ${item.time}</span>
+              <span>Status: ${item.status}</span>
+            </div>
+          </div>
+        `;
+        container.appendChild(itemCard);
+      });
+    };
+
+    // Set up navigation buttons
+    const setupNavButtons = () => {
+      const loginBtn = document.querySelector(".login-btn");
+      const registerBtn = document.querySelector(".register-btn");
+      const reportLostBtn = document.querySelector(".cta-buttons .primary");
+      const browseFoundBtn = document.querySelector(".cta-buttons .secondary");
+
+      if (loginBtn) {
+        loginBtn.addEventListener("click", () => {
+          window.location.href = "login.html";
+        });
+      }
+
+      if (registerBtn) {
+        registerBtn.addEventListener("click", () => {
+          window.location.href = "register.html";
+        });
+      }
+
+      if (reportLostBtn) {
+        reportLostBtn.addEventListener("click", () => {
+          if (localStorage.getItem("token")) {
+            window.location.href = "post-lost.html";
+          } else {
+            window.location.href = "login.html";
+          }
+        });
+      }
+
+      if (browseFoundBtn) {
+        browseFoundBtn.addEventListener("click", () => {
+          if (localStorage.getItem("token")) {
+            window.location.href = "post-found.html";
+          } else {
+            window.location.href = "login.html";
+          }
+        });
+      }
+    };
+
+    // Initialize index page
+    loadItems();
+    setupNavButtons();
+
+    // Auto-refresh items every 30 seconds
+    setInterval(loadItems, 30000);
   }
 });
