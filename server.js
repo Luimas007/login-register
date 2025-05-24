@@ -74,6 +74,7 @@ const PostSchema = new mongoose.Schema({
   image: String,
   createdAt: { type: Date, default: Date.now },
   status: { type: String, default: "Pending" },
+  connectedWith: { type: mongoose.Schema.Types.ObjectId, ref: "Post" },
 });
 const Post = mongoose.model("Post", PostSchema);
 
@@ -116,6 +117,10 @@ app.get("/post-found", authenticateToken, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "post-found.html"));
 });
 
+app.get("/connect-lost-found", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "connect-lost-found.html"));
+});
+
 // New endpoint to get all items
 app.get("/api/all-items", async (req, res) => {
   try {
@@ -130,6 +135,31 @@ app.get("/api/all-items", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching items:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// New endpoint to get item details
+app.get("/api/item/:id", async (req, res) => {
+  try {
+    const item = await Post.findById(req.params.id).populate("userId");
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    let connectedItem = null;
+    if (item.connectedWith) {
+      connectedItem = await Post.findById(item.connectedWith).populate(
+        "userId"
+      );
+    }
+
+    res.json({
+      item,
+      connectedItem,
+    });
+  } catch (error) {
+    console.error("Error fetching item details:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -427,6 +457,34 @@ app.post(
     }
   }
 );
+
+// Connect lost and found items
+app.post("/api/connect-items", authenticateToken, async (req, res) => {
+  const { lostItemId, foundItemId } = req.body;
+
+  try {
+    const lostItem = await Post.findById(lostItemId);
+    const foundItem = await Post.findById(foundItemId);
+
+    if (!lostItem || !foundItem) {
+      return res.status(404).json({ message: "One or both items not found" });
+    }
+
+    // Update both items to show they're connected
+    lostItem.connectedWith = foundItem._id;
+    foundItem.connectedWith = lostItem._id;
+    lostItem.status = "Connected";
+    foundItem.status = "Connected";
+
+    await lostItem.save();
+    await foundItem.save();
+
+    res.json({ message: "Items connected successfully" });
+  } catch (error) {
+    console.error("Error connecting items:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 // Start server
 app.listen(PORT, () => {

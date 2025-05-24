@@ -49,15 +49,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Set up logout functionality
   const setupLogout = () => {
-    const logoutBtn = document.getElementById("logout");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", (e) => {
+    document.addEventListener("click", (e) => {
+      if (e.target && e.target.id === "logout") {
         e.preventDefault();
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         window.location.href = "/login.html";
-      });
-    }
+      }
+    });
   };
 
   // Initialize auth-related UI
@@ -365,6 +364,89 @@ document.addEventListener("DOMContentLoaded", () => {
     loadProfile();
   }
 
+  // Connect Lost-Found Page
+  if (window.location.pathname.includes("connect-lost-found.html")) {
+    const loadItemDetails = async () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemId = urlParams.get("id");
+
+        if (!itemId) {
+          showMessage("No item specified", "danger");
+          return;
+        }
+
+        const res = await fetch(`/api/item/${itemId}`);
+        const data = await res.json();
+
+        if (res.ok) {
+          const item = data.item;
+          const connectedItem = data.connectedItem;
+
+          // Display main item
+          document.getElementById("item-image").src = item.image;
+          document.getElementById("item-type").textContent =
+            item.type === "lost" ? "Lost Item" : "Found Item";
+          document.getElementById("item-place").textContent = item.place;
+          document.getElementById("item-time").textContent = item.time;
+          document.getElementById("item-date").textContent = new Date(
+            item.date
+          ).toLocaleDateString();
+          document.getElementById("item-status").textContent = item.status;
+
+          // Display user who posted the item
+          if (item.userId) {
+            document.getElementById("poster-name").textContent =
+              item.userId.username;
+            document.getElementById("poster-email").textContent =
+              item.userId.email;
+            document.getElementById("poster-image").src =
+              item.userId.idCard || "";
+          }
+
+          // Display connected item if exists
+          const connectedItemSection = document.getElementById(
+            "connected-item-section"
+          );
+          if (connectedItem) {
+            connectedItemSection.style.display = "block";
+            document.getElementById("connected-item-image").src =
+              connectedItem.image;
+            document.getElementById("connected-item-type").textContent =
+              connectedItem.type === "lost" ? "Lost Item" : "Found Item";
+            document.getElementById("connected-item-place").textContent =
+              connectedItem.place;
+            document.getElementById("connected-item-time").textContent =
+              connectedItem.time;
+            document.getElementById("connected-item-date").textContent =
+              new Date(connectedItem.date).toLocaleDateString();
+            document.getElementById("connected-item-status").textContent =
+              connectedItem.status;
+
+            // Display user who posted the connected item
+            if (connectedItem.userId) {
+              document.getElementById("connected-poster-name").textContent =
+                connectedItem.userId.username;
+              document.getElementById("connected-poster-email").textContent =
+                connectedItem.userId.email;
+              document.getElementById("connected-poster-image").src =
+                connectedItem.userId.idCard || "";
+            }
+          } else {
+            connectedItemSection.style.display = "none";
+          }
+        } else {
+          showMessage("Failed to load item details", "danger");
+        }
+      } catch (error) {
+        console.error("Error loading item details:", error);
+        showMessage("An error occurred", "danger");
+      }
+    };
+
+    loadItemDetails();
+  }
+
   // Index Page Functionality
   if (
     window.location.pathname === "/" ||
@@ -426,6 +508,12 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
         `;
+
+        // Add click event to redirect to connect-lost-found page
+        itemCard.addEventListener("click", () => {
+          window.location.href = `/connect-lost-found.html?id=${item._id}`;
+        });
+
         container.appendChild(itemCard);
       });
     };
