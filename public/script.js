@@ -28,18 +28,41 @@ document.addEventListener("DOMContentLoaded", () => {
     return token;
   };
 
+  // Update navigation based on auth status
+  const updateNavAuth = () => {
+    const token = localStorage.getItem("token");
+    const navRight = document.querySelector(".nav-right");
+    if (navRight) {
+      if (token) {
+        navRight.innerHTML = `
+          <button id="logout" class="logout-btn">Logout</button>
+          <button class="profile-btn" onclick="window.location.href='/profile.html'">Profile</button>
+        `;
+      } else {
+        navRight.innerHTML = `
+          <button class="login-btn">Login</button>
+          <button class="register-btn">Register</button>
+        `;
+      }
+    }
+  };
+
   // Set up logout functionality
-  const logoutElements = document.querySelectorAll("#logout");
-  if (logoutElements.length > 0) {
-    logoutElements.forEach((element) => {
-      element.addEventListener("click", (e) => {
+  const setupLogout = () => {
+    const logoutBtn = document.getElementById("logout");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", (e) => {
         e.preventDefault();
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         window.location.href = "/login.html";
       });
-    });
-  }
+    }
+  };
+
+  // Initialize auth-related UI
+  updateNavAuth();
+  setupLogout();
 
   // Registration form
   const registerForm = document.getElementById("register-form");
@@ -121,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (res.ok) {
           localStorage.setItem("token", data.token);
           localStorage.setItem("user", JSON.stringify(data.user));
+          updateNavAuth();
           setTimeout(() => {
             window.location.href = "/profile.html";
           }, 1500);
@@ -430,7 +454,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (localStorage.getItem("token")) {
             window.location.href = "post-lost.html";
           } else {
-            window.location.href = "login.html";
+            showMessage("Please login or register to report items", "danger");
+            setTimeout(() => {
+              window.location.href = "login.html";
+            }, 1500);
           }
         });
       }
@@ -440,13 +467,20 @@ document.addEventListener("DOMContentLoaded", () => {
           if (localStorage.getItem("token")) {
             window.location.href = "post-found.html";
           } else {
-            window.location.href = "login.html";
+            showMessage(
+              "Please login or register to browse found items",
+              "danger"
+            );
+            setTimeout(() => {
+              window.location.href = "login.html";
+            }, 1500);
           }
         });
       }
     };
 
     // Initialize index page
+    updateNavAuth();
     loadItems();
     setupNavButtons();
 
