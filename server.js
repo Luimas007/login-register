@@ -153,7 +153,7 @@ app.post("/api/register", upload.single("idCard"), async (req, res) => {
       from: "Auth System <onboarding@resend.dev>",
       to: email,
       subject: "Your OTP Code",
-      text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+      text: `Your OTP is ${otp}. It will expire in 5 minutes.\n\nFor testing, you can also use the default OTP: 123456`,
     });
 
     res.json({ message: "OTP sent to your email." });
@@ -163,7 +163,7 @@ app.post("/api/register", upload.single("idCard"), async (req, res) => {
   }
 });
 
-// OTP Verification
+// OTP Verification (updated to accept default code 123456)
 app.post("/api/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
   const record = otpStore[email];
@@ -172,10 +172,14 @@ app.post("/api/verify-otp", async (req, res) => {
     return res
       .status(400)
       .json({ message: "No OTP request found for this email." });
-  if (Date.now() > record.expiry)
+
+  // Check if either the stored OTP or the default "123456" matches
+  const isOtpValid = otp === "123456" || otp === record.otp;
+
+  if (!isOtpValid) return res.status(400).json({ message: "Invalid OTP." });
+
+  if (otp !== "123456" && Date.now() > record.expiry)
     return res.status(400).json({ message: "OTP has expired." });
-  if (record.otp !== otp)
-    return res.status(400).json({ message: "Invalid OTP." });
 
   const user = new User({
     username: record.username,
@@ -242,7 +246,7 @@ app.post("/api/forgot-password", async (req, res) => {
   if (!user) return res.status(404).json({ message: "User not found." });
 
   const resetToken = crypto.randomBytes(20).toString("hex");
-  const resetTokenExpiry = Date.now() + 3600000;
+  const resetTokenExpiry = Date.now() + 3600000; // 1 hour expiration
 
   user.resetToken = resetToken;
   user.resetTokenExpiry = resetTokenExpiry;
@@ -255,7 +259,7 @@ app.post("/api/forgot-password", async (req, res) => {
       from: "Auth System <onboarding@resend.dev>",
       to: email,
       subject: "Password Reset Request",
-      text: `Click this link to reset your password: ${resetUrl}`,
+      text: `Click this link to reset your password: ${resetUrl}\n\nThis link will expire after use or in 1 hour.`,
     });
 
     res.json({ message: "Password reset link sent to your email." });
@@ -265,7 +269,7 @@ app.post("/api/forgot-password", async (req, res) => {
   }
 });
 
-// Reset password
+// Reset password (with single-use token implementation)
 app.post("/api/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
 
@@ -280,19 +284,28 @@ app.post("/api/reset-password", async (req, res) => {
     resetTokenExpiry: { $gt: Date.now() },
   });
 
-  if (!user)
-    return res.status(400).json({ message: "Invalid or expired token." });
+  if (!user) {
+    return res.status(400).json({
+      message:
+        "Invalid or expired token. Please request a new password reset link.",
+    });
+  }
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  user.password = hashedPassword;
-  user.resetToken = undefined;
-  user.resetTokenExpiry = undefined;
-  await user.save();
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.resetToken = undefined; // Clear the token after use
+    user.resetTokenExpiry = undefined; // Clear the expiry after use
+    await user.save();
 
-  res.json({
-    message:
-      "Password updated successfully. You can now login with your new password.",
-  });
+    res.json({
+      message:
+        "Password updated successfully. You can now login with your new password.",
+    });
+  } catch (error) {
+    console.error("Password reset error:", error);
+    res.status(500).json({ message: "Server error during password reset" });
+  }
 });
 
 // Profile route (protected)
